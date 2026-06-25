@@ -19,6 +19,11 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Основной бизнес-сервис для формирования персональных рекомендаций банковских продуктов.
+ * Управляет выполнением статических и динамических правил скоринга,
+ * а также агрегацией сквозной статистики срабатываний.
+ */
 @Service
 public class RecommendationService {
 
@@ -40,22 +45,34 @@ public class RecommendationService {
         this.recommendationsRepository = recommendationsRepository;
     }
 
+    /**
+     * Формирует список доступных банковских продуктов для конкретного пользователя.
+     * Проверяет статические правила из кода и динамические правила из операционной базы данных.
+     * В случае успешного выполнения динамического правила атомарно инкрементирует счетчик статистики.
+     *
+     * @param userId уникальный идентификатор пользователя (UUID)
+     * @return список отформатированных ответов с рекомендациями банковских продуктов
+     */
     @Transactional
     public List<RecommendationResponse> getRecommendations(UUID userId) {
         List<RecommendationResponse> responses = new ArrayList<>();
 
+        // 1. Обработка жестко закоммиченных статических бизнес-правил (Первое ТЗ)
         fixedRules.stream()
                 .map(rule -> rule.evaluate(userId))
                 .filter(Optional::isPresent)
                 .map(Optional::get)
                 .forEach(responses::add);
 
+        // 2. Обработка динамических правил, управляемых через REST API (Второе и Третье ТЗ)
         List<DynamicRule> allDynamicRules = dynamicRuleRepository.findAll();
         for (DynamicRule rule : allDynamicRules) {
+            // Проверяем, что ВСЕ условия вложенной цепочки динамического правила вернули true
             boolean rulePassed = rule.getRule().stream()
                     .allMatch(condition -> ruleEvaluatorService.evaluateCondition(userId, condition));
 
             if (rulePassed) {
+                // Атомарный инкремент счетчика статистики в рамках текущей транзакции для предотвращения Race Condition
                 RuleStat stat = ruleStatRepository.findById(rule.getId())
                         .orElseGet(() -> new RuleStat(rule.getId(), 0L));
                 stat.setCount(stat.getCount() + 1);
@@ -72,10 +89,18 @@ public class RecommendationService {
         return responses;
     }
 
+    /**
+     * Возвращает сквозную статистику срабатываний по всем зарегистрированным динамическим правилам.
+     * Для правил, которые ни разу не выполнялись, принудительно возвращается значение 0.
+     *
+     * @return DTO-объект со списком идентификаторов правил и количеством их срабатываний
+     */
     @Transactional(readOnly = true)
     public RuleStatsResponse getRuleStats() {
         List<DynamicRule> allRules = dynamicRuleRepository.findAll();
 
+        // Оптимизация производительности O(1): собираем всю статистику в карту в памяти за один проход,
+        // предотвращая возникновение проблемы N+1 запросов во вложенном стриме.
         Map<UUID, Long> statsMap = ruleStatRepository.findAll().stream()
                 .collect(Collectors.toMap(RuleStat::getRuleId, RuleStat::getCount));
 
@@ -87,6 +112,10 @@ public class RecommendationService {
         return new RuleStatsResponse(dtos);
     }
 
+    /**
+     * Выполняет принудительный сброс оперативной памяти локального кэша Caffeine
+     * для аналитического репозитория транзакций клиентов.
+     */
     public void clearCaches() {
         recommendationsRepository.clearAllCaches();
     }
