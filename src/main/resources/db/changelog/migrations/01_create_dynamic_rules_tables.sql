@@ -21,3 +21,29 @@ CREATE TABLE query_arguments (
                                  argument VARCHAR(255) NOT NULL,
                                  CONSTRAINT fk_argument_condition FOREIGN KEY (condition_id) REFERENCES query_conditions(id)
 );
+
+-- changeset ssapyanov:2
+CREATE TABLE IF NOT EXISTS users (
+                                     id UUID PRIMARY KEY,
+                                     username VARCHAR(255) NOT NULL,
+    first_name VARCHAR(255) NOT NULL,
+    last_name VARCHAR(255) NOT NULL
+    );
+
+-- Добавляем тестового пользователя ivan_ivanov
+INSERT INTO users (id, username, first_name, last_name)
+VALUES ('123e4567-e89b-12d3-a456-426614174000', 'Ivan Ivanov', 'Ivan', 'Ivanov');
+
+-- changeset ssapyanov:3
+CREATE TABLE rule_stats (
+                            rule_id UUID PRIMARY KEY NOT NULL,
+                            count BIGINT NOT NULL,
+                            CONSTRAINT fk_stats_rule FOREIGN KEY (rule_id) REFERENCES dynamic_rules(id) ON DELETE CASCADE
+);
+
+-- changeset ssapyanov:4
+INSERT INTO dynamic_rules (id, product_name, product_id, product_text)
+VALUES ('9e11516e-8cd2-4c28-8777-62cc99432bf1', 'Кредитная карта', '9e11516e-8cd2-4c28-8777-62cc99432bf2', 'Попробуйте нашу карту с кэшбеком');
+
+INSERT INTO query_conditions (id, query, negate, rule_id)
+VALUES (1, 'USER_CREDIT_COUNT', false, '9e11516e-8cd2-4c28-8777-62cc99432bf1');

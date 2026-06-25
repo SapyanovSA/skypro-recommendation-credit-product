@@ -17,8 +17,14 @@ public class RuleEvaluatorService {
 
     public boolean evaluateCondition(UUID userId, QueryCondition condition) {
         boolean result = switch (condition.getQuery()) {
-            case "USER_OF" -> repository.countTransactions(userId, condition.getArguments().get(0)) > 0;
-            case "ACTIVE_USER_OF" -> repository.countTransactions(userId, condition.getArguments().get(0)) >= 5;
+            case "USER_CREDIT_COUNT" -> true;
+
+            case "USER_OF" -> condition.getArguments() != null && !condition.getArguments().isEmpty()
+                    && repository.countTransactions(userId, condition.getArguments().get(0)) > 0;
+
+            case "ACTIVE_USER_OF" -> condition.getArguments() != null && !condition.getArguments().isEmpty()
+                    && repository.countTransactions(userId, condition.getArguments().get(0)) >= 5;
+
             case "TRANSACTION_SUM_COMPARE" -> evaluateSumCompare(userId, condition);
             case "TRANSACTION_SUM_COMPARE_DEPOSIT_WITHDRAW" -> evaluateDepositWithdrawCompare(userId, condition);
             default -> false;
