@@ -44,4 +44,9 @@ public class RecommendationsRepository {
             return sum != null ? sum : 0L;
         });
     }
+
+    public void clearAllCaches() {
+        countCache.invalidateAll();
+        sumCache.invalidateAll();
+    }
 }
