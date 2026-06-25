@@ -1,0 +1,58 @@
+package skypro.homework.recommendation.service;
+
+import org.springframework.stereotype.Service;
+import skypro.homework.recommendation.model.QueryCondition;
+import skypro.homework.recommendation.repository.RecommendationsRepository;
+
+import java.util.UUID;
+
+@Service
+public class RuleEvaluatorService {
+
+    private final RecommendationsRepository repository;
+
+    public RuleEvaluatorService(RecommendationsRepository repository) {
+        this.repository = repository;
+    }
+
+    public boolean evaluateCondition(UUID userId, QueryCondition condition) {
+        boolean result = switch (condition.getQuery()) {
+            case "USER_OF" -> repository.countTransactions(userId, condition.getArguments().get(0)) > 0;
+            case "ACTIVE_USER_OF" -> repository.countTransactions(userId, condition.getArguments().get(0)) >= 5;
+            case "TRANSACTION_SUM_COMPARE" -> evaluateSumCompare(userId, condition);
+            case "TRANSACTION_SUM_COMPARE_DEPOSIT_WITHDRAW" -> evaluateDepositWithdrawCompare(userId, condition);
+            default -> false;
+        };
+        return condition.isNegate() ? !result : result;
+    }
+
+    private boolean evaluateSumCompare(UUID userId, QueryCondition condition) {
+        String productType = condition.getArguments().get(0);
+        String transactionType = condition.getArguments().get(1);
+        String operator = condition.getArguments().get(2);
+        long valueC = Long.parseLong(condition.getArguments().get(3));
+
+        long sum = repository.sumTransactions(userId, productType, transactionType);
+        return compareValues(sum, operator, valueC);
+    }
+
+    private boolean evaluateDepositWithdrawCompare(UUID userId, QueryCondition condition) {
+        String productType = condition.getArguments().get(0);
+        String operator = condition.getArguments().get(1);
+
+        long depositSum = repository.sumTransactions(userId, productType, "DEPOSIT");
+        long withdrawSum = repository.sumTransactions(userId, productType, "WITHDRAW");
+        return compareValues(depositSum, operator, withdrawSum);
+    }
+
+    private boolean compareValues(long val1, String operator, long val2) {
+        return switch (operator) {
+            case ">" -> val1 > val2;
+            case "<" -> val1 < val2;
+            case "=" -> val1 == val2;
+            case ">=" -> val1 >= val2;
+            case "<=" -> val1 <= val2;
+            default -> false;
+        };
+    }
+}
